@@ -1,62 +1,103 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
-public class PlayerController : MonoBehaviour
+public class PlayerMovement : MonoBehaviour
 {
-    public float moveSpeed = 5f;  // Speed of the player movement
-    public float jumpForce = 10f; // Force of the jump
-    public LayerMask groundLayer; // Ground layer to check if the player is on the ground
-    public Transform groundCheck; // Position to check if player is grounded
-    
+    public float moveSpeed = 5f;
+    public float jumpForce = 10f;
+    public Animator animator;
+
     private Rigidbody2D rb;
-    private Animator anim;
-    private bool isGrounded;
-    private bool isIdle = true; // Initially set the player as idle
-    
+    private bool isRunning;
+    private bool isJumping;
+    private bool isGrounded; // To check if the player is on the ground
+
+    private float moveInput;
+
+    public Transform groundCheck; // Reference to the ground check position
+    public float groundCheckRadius = 0.2f; // Radius for the ground check
+    public LayerMask groundLayer; // Layer that defines the ground
+
     void Start()
     {
-        rb = GetComponent<Rigidbody2D>();  // Get the Rigidbody2D component
-        anim = GetComponent<Animator>();   // Get the Animator component
+        rb = GetComponent<Rigidbody2D>();
     }
 
     void Update()
     {
-        // Get horizontal movement input (A/D or Arrow keys)
-        float moveInput = Input.GetAxisRaw("Horizontal");
+        // Ground check using a small circle cast at the player's feet
+        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
 
-        // Set the player's velocity (X axis movement and current Y velocity for jump/gravity)
-        rb.linearVelocity = new Vector2(moveInput * moveSpeed, rb.linearVelocity.y);
-
-        // Flip the sprite based on movement direction
-        if (moveInput != 0)
+        // Get player input for movement (A and D keys)
+        moveInput = 0;
+        if (Input.GetKey(KeyCode.A))
         {
-            transform.localScale = new Vector3(Mathf.Sign(moveInput), 1, 1);
-            isIdle = false; // Player is not idle if moving
+            moveInput = -1; // Move left
+        }
+        else if (Input.GetKey(KeyCode.D))
+        {
+            moveInput = 1; // Move right
         }
 
-        // Jumping
+        // Check if the player is trying to jump (only if grounded) - Space key
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
+            isJumping = true;
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce); // Apply jump force
-            isIdle = false; // Player is not idle if jumping
         }
 
-        // Update Animator parameters to play correct animations
-        anim.SetBool("isRunning", moveInput != 0);  // isRunning when moving left or right
-        anim.SetBool("isJumping", !isGrounded && rb.linearVelocity.y > 0); // isJumping when jumping up
-        anim.SetBool("isFalling", !isGrounded && rb.linearVelocity.y < 0); // isFalling when falling down
-
-        // Update the idle animation state
-        if (isGrounded && moveInput == 0)
+        // Keep `isJumping` true while the player is in the air
+        if (!isGrounded && rb.linearVelocity.y > 0) // Player is still jumping upwards
         {
-            isIdle = true;
+            isJumping = true;
+        }
+        else if (isGrounded) // Player is grounded
+        {
+            isJumping = false;
         }
 
-        anim.SetBool("isIdle", isIdle); // Update isIdle bool in the Animator
-    }
+        // Update running animation based on movement input
+        if (moveInput != 0)
+        {
+            isRunning = true;
+        }
+        else
+        {
+            isRunning = false;
+        }
 
-    void FixedUpdate()
-    {
-        // Check if the player is grounded
-        isGrounded = Physics2D.OverlapCircle(groundCheck.position, 0.1f, groundLayer);
+        // Update the animator parameters
+        animator.SetBool("isRunning", isRunning);
+        animator.SetBool("isJumping", isJumping);
+
+        // Move the player horizontally
+        rb.linearVelocity = new Vector2(moveInput * moveSpeed, rb.linearVelocity.y);
+
+        // Flip character sprite based on movement direction
+        if (moveInput > 0)
+        {
+            transform.localScale = new Vector3(1, 1, 1); // Facing right
+        }
+        else if (moveInput < 0)
+        {
+            transform.localScale = new Vector3(-1, 1, 1); // Facing left
+        }
+        else
+        {
+            transform.localScale = new Vector3(transform.localScale.x, 1, 1); // Keep facing the same direction if not moving
+        }
+
+        // Check if the player has fallen below y = -8
+        if (transform.position.y < -8)
+        {
+            // If in the Unity editor, stop playing the game
+            #if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+            #else
+            // If a built game, quit the application
+            Application.Quit();
+            #endif
+        }
     }
 }
